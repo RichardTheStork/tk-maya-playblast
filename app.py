@@ -23,74 +23,106 @@ import pymel.core as pm
 
 class MayaPlayblast(Application):
 
-    def init_app(self):
-        if self.context.entity is None:
-            raise tank.TankError("Cannot load the Playblast application! "
-                                 "Your current context does not have an entity (e.g. "
-                                 "a current Shot, current Asset etc). This app requires "
-                                 "an entity as part of the context in order to work.")
+	def init_app(self):
+		if self.context.entity is None:
+			raise tank.TankError("Cannot load the Playblast application! "
+								 "Your current context does not have an entity (e.g. "
+								 "a current Shot, current Asset etc). This app requires "
+								 "an entity as part of the context in order to work.")
 
-        self._playblast_template = self.get_template("playblast_template")
-        self._scene_template = self.get_template("current_scene_template")
+		self._playblast_template = self.get_template("playblast_template")
+		self._scene_template = self.get_template("current_scene_template")
 
-        self.engine.register_command("Playblast", self.run_app)
+		self.engine.register_command("Playblast", self.run_app)
 
-    def destroy_app(self):
-        self.log_debug("Destroying sg_set_frame_range")
+	def destroy_app(self):
+		self.log_debug("Playblast")
 
-    def run_app(self):
-        """
-        Callback from when the menu is clicked.
-        """
-        width = self.get_setting("width", 1920)
-        height = self.get_setting("height", 1080)
-        start_frame = pm.animation.playbackOptions(query=True, minTime=True)
-        end_frame = pm.animation.playbackOptions(query=True, maxTime=True)
+	def run_app(self):
+		"""
+		Callback from when the menu is clicked.
+		"""
+		message = ""
+		width = self.get_setting("width", 1920)
+		height = self.get_setting("height", 1080)
+		start_frame = pm.animation.playbackOptions(query=True, minTime=True)
+		end_frame = pm.animation.playbackOptions(query=True, maxTime=True)
 
-        # now try to see if we are in a normal work file
-        # in that case deduce the name from it
-        curr_filename = os.path.abspath(pm.system.sceneName())
-        version = 0
-        name = ""
-        if self._scene_template.validate(curr_filename):
-            fields = self._scene_template.get_fields(curr_filename)
-            name = fields.get("name")
-            version = fields.get("version")
+		# now try to see if we are in a normal work file
+		# in that case deduce the name from it
+		curr_filename = os.path.abspath(pm.system.sceneName())
+		version = 0
+		name = ""
+		fields = None
+		if self._scene_template.validate(curr_filename):
+			fields = self._scene_template.get_fields(curr_filename)
+			name = fields.get("name")
+			version = fields.get("version")
 
-        fields = self.context.as_template_fields(self._playblast_template)
-        if name:
-            fields["name"] = name
-        if version is not None:
-            fields["version"] = version
+		# fields = self.context.as_template_fields(self._playblast_template)
+		if name:
+			fields["name"] = name
 
-        playblast_path = self._playblast_template.apply_fields(fields)
+		if version is not None:
+			fields["version"] = version
+		if width is not None:
+			fields["width"] = width
+		if height is not None:
+			fields["height"] = height
 
-        # Save display states
-        sel_nurbs_curves = pm.windows.modelEditor('modelPanel4', query=True, nurbsCurves=True)
-        sel_locators = pm.windows.modelEditor('modelPanel4', query=True, locators=True)
-        sel_joints = pm.windows.modelEditor('modelPanel4', query=True, joints=True)
-        sel_ik = pm.windows.modelEditor('modelPanel4', query=True, ikHandles=True)
-        sel_deformers = pm.windows.modelEditor('modelPanel4', query=True, deformers=True)
-        sel_grid = pm.windows.modelEditor('modelPanel4', query=True, grid=True)
+		print fields
+		missingFields = self._playblast_template.missing_keys(fields)
+		if missingFields:
+			print "MISSING FIELDS: "
+			print missingFields
+			message += "Missing Fields : %s\n" %missingFields
+		else:
+			playblast_path = self._playblast_template.apply_fields(fields)
+			message += "Path = %s\n" %playblast_path
+			
+			print "Target path : ", playblast_path
+			# Save display states
+			sel_nurbs_curves = pm.windows.modelEditor('modelPanel4', query=True, nurbsCurves=True)
+			sel_locators = pm.windows.modelEditor('modelPanel4', query=True, locators=True)
+			sel_joints = pm.windows.modelEditor('modelPanel4', query=True, joints=True)
+			sel_ik = pm.windows.modelEditor('modelPanel4', query=True, ikHandles=True)
+			sel_deformers = pm.windows.modelEditor('modelPanel4', query=True, deformers=True)
+			sel_grid = pm.windows.modelEditor('modelPanel4', query=True, grid=True)
 
-        # Set display states
-        pm.windows.modelEditor('modelPanel4', edit=True, nurbsCurves=False)
-        pm.windows.modelEditor('modelPanel4', edit=True, locators=False)
-        pm.windows.modelEditor('modelPanel4', edit=True, joints=False)
-        pm.windows.modelEditor('modelPanel4', edit=True, ikHandles=False)
-        pm.windows.modelEditor('modelPanel4', edit=True, deformers=False)
-        pm.windows.modelEditor('modelPanel4', edit=True, grid=False)
+			# Set display states
+			pm.windows.modelEditor('modelPanel4', edit=True, nurbsCurves=False)
+			pm.windows.modelEditor('modelPanel4', edit=True, locators=False)
+			pm.windows.modelEditor('modelPanel4', edit=True, joints=False)
+			pm.windows.modelEditor('modelPanel4', edit=True, ikHandles=False)
+			pm.windows.modelEditor('modelPanel4', edit=True, deformers=False)
+			pm.windows.modelEditor('modelPanel4', edit=True, grid=False)
 
-        pm.animation.playblast(
-            filename=playblast_path, format='iff', compression='png',
-            width=width, height=height, percent=100,
-            showOrnaments=False, viewer=True,
-            sequenceTime=False, framePadding=4, clearCache=True)
-
-        # Reset display states
-        pm.windows.modelEditor('modelPanel4', edit=True, nurbsCurves=sel_nurbs_curves)
-        pm.windows.modelEditor('modelPanel4', edit=True, locators=sel_locators)
-        pm.windows.modelEditor('modelPanel4', edit=True, joints=sel_joints)
-        pm.windows.modelEditor('modelPanel4', edit=True, ikHandles=sel_ik)
-        pm.windows.modelEditor('modelPanel4', edit=True, deformers=sel_deformers)
-        pm.windows.modelEditor('modelPanel4', edit=True, grid=sel_grid)
+			# pm.animation.playblast(
+				# filename=playblast_path, format='iff', compression='png',
+				# width=width, height=height, percent=100,
+				# showOrnaments=False, viewer=True,
+				# sequenceTime=False, framePadding=4, clearCache=True)
+			
+			print "Start Playblast"
+			pm.animation.playblast(
+				filename=playblast_path, format='image', compression='png',
+				widthHeight=[width,height], percent=100, qlt=100,
+				showOrnaments=True, viewer=False, offScreen=True, forceOverwrite=True, 
+				sequenceTime=False, framePadding=4, clearCache=True)
+			
+			message += "\nPlayblast done!"
+			
+			# Reset display states
+			pm.windows.modelEditor('modelPanel4', edit=True, nurbsCurves=sel_nurbs_curves)
+			pm.windows.modelEditor('modelPanel4', edit=True, locators=sel_locators)
+			pm.windows.modelEditor('modelPanel4', edit=True, joints=sel_joints)
+			pm.windows.modelEditor('modelPanel4', edit=True, ikHandles=sel_ik)
+			pm.windows.modelEditor('modelPanel4', edit=True, deformers=sel_deformers)
+			pm.windows.modelEditor('modelPanel4', edit=True, grid=sel_grid)
+			
+			print "Playblast Ended"
+		
+		# present a pyside dialog
+		# lazy import so that this script still loads in batch mode
+		from tank.platform.qt import QtCore, QtGui
+		QtGui.QMessageBox.information(None, "Playblast", message)
